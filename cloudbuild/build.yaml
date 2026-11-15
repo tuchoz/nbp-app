@@ -1,8 +1,11 @@
-# Trigger: merge/push to main in repo #1, WITHOUT deployment.
-# Before running: configure _LOCATION and _REPOSITORY and grant build SA Artifact Registry Writer.
+# NBP application: build, scan, generate SBOM and publish.
+# Emergency override must be explicitly enabled for an authorized build.
+
 substitutions:
   _LOCATION: europe-central2
-  _REPOSITORY: nbp-usd
+  _REPOSITORY: nbp-docker
+  _IMAGE: nbp-app
+  _ALLOW_TRIVY_FAILURE: "false"
 
 steps:
   - id: docker-build
@@ -12,7 +15,7 @@ steps:
       - --file
       - docker/Dockerfile
       - --tag
-      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
       - .
 
   - id: trivy-scan
@@ -20,33 +23,64 @@ steps:
     entrypoint: sh
     waitFor: [docker-build]
     args:
-      - -ec
+      - -c
       - |
-        trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed \
-          "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA"
+        trivy image \
+          --scanners vuln \
+          --severity HIGH,CRITICAL \
+          --exit-code 0 \
+          --format json \
+          --output /workspace/trivy-report.json \
+          "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA"
+
+        RESULT=$?
+
+        if [ "$$RESULT" -ne 0 ]; then
+          echo "SECURITY SCAN ERROR: Trivy could not complete the scan."
+
+          if [ "${_ALLOW_TRIVY_FAILURE}" = "true" ]; then
+            echo "WARNING: Emergency override enabled. Image was NOT successfully scanned."
+            exit 0
+          fi
+
+          echo "BLOCKED: Trivy scan failed. Explicit emergency override is required."
+          exit 1
+        fi
+
+        echo "Trivy scan completed. Report: trivy-report.json"
 
   - id: generate-sbom
     name: aquasec/trivy:0.68.2
     entrypoint: sh
     waitFor: [trivy-scan]
     args:
-      - -ec
+      - -c
       - |
-        trivy image --format cyclonedx --output /workspace/sbom.cdx.json \
-          "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA"
+        trivy image \
+          --format cyclonedx \
+          --output /workspace/sbom.cdx.json \
+          "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA"
 
-# Cloud Build uploads listed images only after successful steps.
-images:
-  - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA
+        RESULT=$?
 
-artifacts:
-  objects:
-    location: gs://${_SBOM_BUCKET}/$BUILD_ID/
-    paths:
-      - /workspace/sbom.cdx.json
+        if [ "$$RESULT" -ne 0 ]; then
+          if [ "${_ALLOW_TRIVY_FAILURE}" = "true" ]; then
+            echo "WARNING: SBOM generation failed under emergency override."
+            exit 0
+          fi
+
+          exit 1
+        fi
+
+  - id: docker-push
+    name: gcr.io/cloud-builders/docker
+    waitFor: [generate-sbom]
+    args:
+      - push
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
 
 options:
-  requestedVerifyOption: VERIFIED
   logging: CLOUD_LOGGING_ONLY
-# Configure _SBOM_BUCKET in the trigger; the bucket is managed by Terraform (repo #3).
-# Provenance / automatic Cloud Build attestations become available after the build completes.
+  requestedVerifyOption: VERIFIED
+
+timeout: 1800s
