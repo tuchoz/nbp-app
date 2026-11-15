@@ -1,0 +1,38 @@
+# Trigger: PR in repository #1. Gate the merge with GitHub required checks.
+# Configure substitutions _SONAR_HOST_URL and _SONAR_PROJECT_KEY on the trigger.
+steps:
+  - id: python-quality-tests
+    name: ghcr.io/astral-sh/uv:python3.13-bookworm
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        uv sync --locked
+        uv run --locked ruff check .
+        uv run --locked ruff format --check .
+        uv run --locked pytest --cov=app --cov-branch --cov-report=xml:coverage.xml --cov-report=term-missing
+
+  - id: sonar-quality-gate
+    name: sonarsource/sonar-scanner-cli:latest
+    waitFor: [python-quality-tests]
+    entrypoint: sh
+    secretEnv: [SONAR_TOKEN]
+    args:
+      - -ec
+      - |
+        sonar-scanner \
+          -Dsonar.projectKey="${_SONAR_PROJECT_KEY}" \
+          -Dsonar.sources=app \
+          -Dsonar.tests=tests \
+          -Dsonar.python.coverage.reportPaths=coverage.xml \
+          -Dsonar.host.url="${_SONAR_HOST_URL}" \
+          -Dsonar.qualitygate.wait=true
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/sonar-token/versions/latest
+      env: SONAR_TOKEN
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # Production: pin third-party builder images by tested digest.

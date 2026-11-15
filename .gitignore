@@ -1,0 +1,30 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+trivy-report.json
+sbom.cdx.json
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Credentials
+*.pem
+*.key
+application_default_credentials.json
+
+# Terraform / local files
+*.tfstate
+*.tfplan

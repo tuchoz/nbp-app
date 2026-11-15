@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Ostatni opublikowany średni kurs USD według NBP (tabela A).">
+    <title>Kurs USD · NBP tabela A</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="heading">
+        <p class="eyebrow">NBP / TABELA A</p>
+        <h1>Kurs dolara amerykańskiego</h1>
+        <p class="lead">Ostatni opublikowany kurs średni USD względem PLN.</p>
+      </header>
+      {% if error %}
+        <section class="notice error" role="alert">
+          <strong>Nie możemy teraz pobrać kursu.</strong>
+          <p>Serwis NBP jest chwilowo niedostępny. Spróbuj ponownie później.</p>
+        </section>
+      {% else %}
+        {% if result.stale %}
+          <section class="notice warn" role="status">
+            <strong>Ostatnie zapisane dane</strong>
+            <p>Nie udało się ponownie sprawdzić kursu w NBP. Poniższa wartość może być nieaktualna.</p>
+          </section>
+        {% endif %}
+        <section class="card" aria-label="Kurs średni NBP">
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th scope="col">Waluta</th>
+                <th scope="col">Kod</th>
+                <th scope="col">Kurs średni (PLN)</th>
+                <th scope="col">Data publikacji</th>
+              </tr></thead>
+              <tbody><tr>
+                <td>{{ result.rate.name }}</td>
+                <td><span class="badge">{{ result.rate.code }}</span></td>
+                <td class="rate">{{ "%.4f" | format(result.rate.mid) }}</td>
+                <td>{{ result.rate.publication_date.strftime('%d.%m.%Y') }}</td>
+              </tr></tbody>
+            </table>
+          </div>
+        </section>
+        <p class="details">Numer tabeli: <strong>{{ result.rate.table_number }}</strong>
+          · Ostatnia udana weryfikacja: {{ result.checked_at.strftime('%d.%m.%Y %H:%M') }} (Warszawa)</p>
+      {% endif %}
+      <footer>Źródło: <a href="https://api.nbp.pl/" rel="noopener noreferrer">NBP Web API</a> · Kurs informacyjny, nie kurs transakcyjny.</footer>
+    </main>
+  </body>
+</html>

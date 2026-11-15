@@ -1,0 +1,52 @@
+# Trigger: merge/push to main in repo #1, WITHOUT deployment.
+# Before running: configure _LOCATION and _REPOSITORY and grant build SA Artifact Registry Writer.
+substitutions:
+  _LOCATION: europe-central2
+  _REPOSITORY: nbp-usd
+
+steps:
+  - id: docker-build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - docker/Dockerfile
+      - --tag
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA
+      - .
+
+  - id: trivy-scan
+    name: aquasec/trivy:0.68.2
+    entrypoint: sh
+    waitFor: [docker-build]
+    args:
+      - -ec
+      - |
+        trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed \
+          "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA"
+
+  - id: generate-sbom
+    name: aquasec/trivy:0.68.2
+    entrypoint: sh
+    waitFor: [trivy-scan]
+    args:
+      - -ec
+      - |
+        trivy image --format cyclonedx --output /workspace/sbom.cdx.json \
+          "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA"
+
+# Cloud Build uploads listed images only after successful steps.
+images:
+  - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/app:$COMMIT_SHA
+
+artifacts:
+  objects:
+    location: gs://${_SBOM_BUCKET}/$BUILD_ID/
+    paths:
+      - /workspace/sbom.cdx.json
+
+options:
+  requestedVerifyOption: VERIFIED
+  logging: CLOUD_LOGGING_ONLY
+# Configure _SBOM_BUCKET in the trigger; the bucket is managed by Terraform (repo #3).
+# Provenance / automatic Cloud Build attestations become available after the build completes.
