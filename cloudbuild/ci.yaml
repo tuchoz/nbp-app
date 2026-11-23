@@ -1,28 +1,15 @@
 # NBP Application - Pull Request CI
-#
-# Trigger: Pull Request to main
-#
-# Security scanning and risk acceptance will be added
-# as separate stages.
+# Java 21 + Spring Boot + Maven
 
 steps:
-  - id: python-quality-tests
-    name: ghcr.io/astral-sh/uv:python3.13-bookworm
+  - id: java-tests
+    name: eclipse-temurin:21-jdk-noble
     entrypoint: bash
     args:
       - -euc
       - |
-        uv sync --locked
-
-        uv run --locked ruff check .
-
-        uv run --locked ruff format --check .
-
-        uv run --locked pytest \
-          --cov=app \
-          --cov-branch \
-          --cov-report=xml:coverage.xml \
-          --cov-report=term-missing
+        chmod +x ./mvnw
+        ./mvnw -B clean verify
 
 options:
   logging: CLOUD_LOGGING_ONLY

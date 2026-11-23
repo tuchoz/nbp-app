@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pl" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="description"
+          content="Ostatni opublikowany średni kurs USD według NBP (tabela A).">
+
+    <title>Kurs USD · NBP tabela A</title>
+
+    <link rel="stylesheet" th:href="@{/style.css}" href="/style.css">
+</head>
+
+<body>
+<main class="shell">
+
+    <header class="heading">
+        <p class="eyebrow">NBP / TABELA A</p>
+        <h1>Kurs dolara amerykańskiego</h1>
+        <p class="lead">
+            Ostatni opublikowany kurs średni USD względem PLN.
+        </p>
+    </header>
+
+    <!-- Błąd pobierania kursu -->
+    <section th:if="${error}" class="notice error" role="alert">
+        <strong>Nie możemy teraz pobrać kursu.</strong>
+        <p>Serwis NBP jest chwilowo niedostępny. Spróbuj ponownie później.</p>
+    </section>
+
+    <th:block th:unless="${error}">
+
+        <!-- Kurs z pamięci podczas awarii NBP -->
+        <section th:if="${stale}" class="notice warn" role="status">
+            <strong>Ostatnie zapisane dane</strong>
+            <p>
+                Nie udało się ponownie sprawdzić kursu w NBP.
+                Poniższa wartość może być nieaktualna.
+            </p>
+        </section>
+
+        <section class="card" aria-label="Kurs średni NBP">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Waluta</th>
+                        <th scope="col">Kod</th>
+                        <th scope="col">Kurs średni (PLN)</th>
+                        <th scope="col">Data publikacji</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    <tr>
+                        <td th:text="${currency}">Dolar amerykański</td>
+
+                        <td>
+                            <span class="badge" th:text="${code}">USD</span>
+                        </td>
+
+                        <td class="rate" th:text="${formattedRate}">
+                            4.0613
+                        </td>
+
+                        <td th:text="${publicationDate}">
+                            20.11.2026
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <p class="details">
+            Numer tabeli:
+            <strong th:text="${tableNumber}">226/A/NBP/2026</strong>
+
+            · Ostatnia udana weryfikacja:
+            <span th:text="${checkedAt}">20.11.2026 12:00</span>
+            (Warszawa)
+        </p>
+
+    </th:block>
+
+    <footer>
+        Źródło:
+        <a href="https://api.nbp.pl/" rel="noopener noreferrer">
+            NBP Web API
+        </a>
+        · Kurs informacyjny, nie kurs transakcyjny.
+    </footer>
+
+</main>
+</body>
+</html>

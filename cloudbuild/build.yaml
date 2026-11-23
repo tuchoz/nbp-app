@@ -1,5 +1,5 @@
-# NBP application: build, scan, generate SBOM and publish.
-# Emergency override must be explicitly enabled for an authorized build.
+# NBP Application - Build, Scan, SBOM, Publish
+# Java 21 + Spring Boot
 
 substitutions:
   _LOCATION: europe-central2
@@ -8,8 +8,20 @@ substitutions:
   _ALLOW_TRIVY_FAILURE: "false"
 
 steps:
+  # 1. Maven tests
+  - id: java-tests
+    name: eclipse-temurin:21-jdk-noble
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        chmod +x ./mvnw
+        ./mvnw -B clean verify
+
+  # 2. Docker build
   - id: docker-build
     name: gcr.io/cloud-builders/docker
+    waitFor: [java-tests]
     args:
       - build
       - --file
@@ -18,6 +30,7 @@ steps:
       - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
       - .
 
+  # 3. Security scanning
   - id: trivy-scan
     name: aquasec/trivy:0.68.2
     entrypoint: sh
@@ -28,7 +41,7 @@ steps:
         trivy image \
           --scanners vuln \
           --severity HIGH,CRITICAL \
-          --exit-code 0 \
+          --exit-code 1 \
           --format json \
           --output /workspace/trivy-report.json \
           "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA"
@@ -36,19 +49,19 @@ steps:
         RESULT=$?
 
         if [ "$$RESULT" -ne 0 ]; then
-          echo "SECURITY SCAN ERROR: Trivy could not complete the scan."
-
           if [ "${_ALLOW_TRIVY_FAILURE}" = "true" ]; then
-            echo "WARNING: Emergency override enabled. Image was NOT successfully scanned."
+            echo "WARNING: Authorized security override enabled."
+            echo "Image contains vulnerabilities or the scan failed."
             exit 0
           fi
 
-          echo "BLOCKED: Trivy scan failed. Explicit emergency override is required."
+          echo "BLOCKED: Vulnerabilities HIGH/CRITICAL or Trivy scan error."
           exit 1
         fi
 
-        echo "Trivy scan completed. Report: trivy-report.json"
+        echo "Security scan passed."
 
+  # 4. CycloneDX SBOM
   - id: generate-sbom
     name: aquasec/trivy:0.68.2
     entrypoint: sh
@@ -69,9 +82,13 @@ steps:
             exit 0
           fi
 
+          echo "BLOCKED: SBOM generation failed."
           exit 1
         fi
 
+        echo "SBOM generated."
+
+  # 5. Publish image
   - id: docker-push
     name: gcr.io/cloud-builders/docker
     waitFor: [generate-sbom]

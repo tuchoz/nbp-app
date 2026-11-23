@@ -1,3 +1,9 @@
+# Git
+.git/
+.github/
+.gitignore
+
+# Python
 .venv/
 __pycache__/
 .pytest_cache/
@@ -6,25 +12,38 @@ __pycache__/
 coverage.xml
 htmlcov/
 *.py[cod]
-.env
-.env.*
-!.env.example
-.DS_Store
-.idea/
-.vscode/
-trivy-report.json
-sbom.cdx.json
+*.egg-info/
+uv.lock
+pyproject.toml
+/app/
+
+# Java / Maven
+target/
+*.class
 
 # Build artifacts
 dist/
 build/
-*.egg-info/
 
 # Credentials
+.env
+.env.*
+!.env.example
 *.pem
 *.key
 application_default_credentials.json
 
-# Terraform / local files
+# Security reports
+trivy-report.json
+sbom.cdx.json
+
+# Local files
+.DS_Store
+.idea/
+.vscode/
 *.tfstate
 *.tfplan
+
+# Documentation
+README.md
+docs/
